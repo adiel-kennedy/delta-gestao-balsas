@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Delta Engenharia - Gestão de Obras</title>
+    
+    <link rel="icon" type="image/png" href="icone_delta.png">
+    <link rel="apple-touch-icon" href="icone_delta.png">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#1a2a3a">
+
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+
+    <style>
+        :root { --primary: #1a2a3a; --secondary: #27ae60; --accent: #2980b9; --danger: #c0392b; --bg: #f0f2f5; --whatsapp: #25d366; --warning: #e67e22; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 10px; padding-bottom: 70px; }
+        header { text-align: center; background: var(--primary); color: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; }
+        header h1 { margin: 0; font-size: 20px; color: #f1c40f; }
+        
+        nav { display: flex; gap: 8px; margin-bottom: 15px; background: #34495e; padding: 10px; border-radius: 8px; overflow-x: auto; }
+        nav button { background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 8px 12px; cursor: pointer; border-radius: 6px; font-weight: bold; font-size: 11px; flex-shrink: 0; }
+        
+        .page { display: none; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); min-height: 400px; }
+        .active { display: block; }
+        
+        .form-group { margin-bottom: 12px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 13px; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 15px; }
+        
+        button.btn-save { background: var(--secondary); color: white; border: none; padding: 12px; cursor: pointer; width: 100%; font-weight: bold; border-radius: 8px; margin-top: 5px; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10px; }
+        th, td { border: 1px solid #ddd; padding: 6px; text-align: center; }
+        th { background: #2c3e50; color: white; }
+        
+        .col-nome { text-align: left; min-width: 100px; font-weight: bold; background: #fdfdfd; position: sticky; left: 0; z-index: 1; }
+        .input-mini { width: 45px; padding: 4px; font-size: 10px; text-align: center; border: 1px solid #eee; }
+        .total-final { background: #d4edda; font-weight: bold; color: #155724; }
+        
+        .alert-data { background: #ff7675; color: white; padding: 12px; border-radius: 6px; text-align: center; margin-bottom: 10px; font-weight: bold; display: none; }
+        .btn-tabela { padding: 4px 6px; border: none; border-radius: 4px; color: white; cursor: pointer; margin: 2px; font-size: 10px; }
+        
+        .card-obra { background: #fff; border-left: 5px solid var(--secondary); padding: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-radius: 4px; }
+        
+        footer { position: fixed; bottom: 0; left: 0; width: 100%; background: #fff; text-align: center; padding: 10px 0; font-size: 10px; border-top: 1px solid #eee; }
+    </style>
+</head>
+<body>
+
+<header><h1>DELTA ENGENHARIA LTDA.</h1></header>
+
+<nav>
+    <button onclick="showPage('pagePonto')">📅 PONTO</button>
+    <button onclick="showPage('pageRelatorios')">📊 GERAL</button>
+    <button onclick="showPage('pageResumoObra')">🏗️ POR OBRA</button>
+    <button onclick="showPage('pageQuinzenas')">🗓️ QUINZENAS</button>
+    <button onclick="showPage('pageFunc')">👤 DIARISTAS</button>
+    <button onclick="showPage('pageObras')">🚧 OBRAS</button>
+    <button onclick="showPage('pageConfig')">⚙️ AJUSTES</button>
+</nav>
+
+<div id="pagePonto" class="page active">
+    <div id="alerta_data" class="alert-data">⚠️ HOJE FORA DO PERÍODO DA QUINZENA</div>
+    <label>Quinzena Ativa:</label>
+    <select id="sel_q_ativa" onchange="verificarDataQuinzena(); atualizarPontoHoje();"></select>
+    <div id="header_hoje" style="text-align: center; font-weight: bold; margin: 10px 0; color: var(--accent); border: 1px solid #eee; padding: 5px;"></div>
+    <div style="overflow-x: auto;">
+        <table id="tab_ponto">
+            <thead><tr><th>DIARISTA</th><th>MANHÃ</th><th>TARDE</th><th>HE</th><th>OBRA HE</th></tr></thead>
+            <tbody id="corpo_hoje"></tbody>
+        </table>
+    </div>
+    <button class="btn-save" onclick="salvarPontoHoje()">💾 SALVAR REGISTRO DIÁRIO</button>
+</div>
+
+<div id="pageRelatorios" class="page">
+    <label>Período de Fechamento:</label>
+    <select id="sel_rel_q" onchange="renderRelatorio()"></select>
+    <div id="container_relatorio" style="overflow-x: auto; margin-top: 10px;"></div>
+    <button id="btn_salvar_edicao" class="btn-save" style="display:none; background: var(--accent);" onclick="salvarAlteracoesRelatorio()">📝 SALVAR ALTERAÇÕES NA TABELA</button>
+    <button class="btn-save" style="background:var(--whatsapp); margin-top:15px;" onclick="enviarWhatsApp()">💬 ENVIAR RESUMO POR WHATSAPP</button>
+    <button class="btn-save" style="background:#1d6f42" onclick="exportarExcel()">📊 EXPORTAR PLANILHA EXCEL</button>
+</div>
+
+<div id="pageResumoObra" class="page">
+    <h2>Gasto Total por Obra</h2>
+    <label>Selecione o Período:</label>
+    <select id="sel_resumo_q" onchange="renderResumoObra()"></select>
+    <div id="container_resumo_obra" style="margin-top:15px;"></div>
+</div>
+
+<div id="pageQuinzenas" class="page">
+    <h2>Gerenciar Quinzenas</h2>
+    <div class="form-group">
+        <input type="hidden" id="q_id">
+        <label>Nome da Quinzena</label>
+        <input type="text" id="q_nome" placeholder="Ex: 1ª Mar/26">
+    </div>
+    <div class="form-group">
+        <label>Data Início</label>
+        <input type="date" id="q_ini">
+    </div>
+    <div class="form-group">
+        <label>Data Fim</label>
+        <input type="date" id="q_fim">
+    </div>
+    <button class="btn-save" onclick="salvarGeral('quinzenas')">SALVAR QUINZENA</button>
+    <div id="lista_q_tab"></div>
+</div>
+
+<div id="pageFunc" class="page">
+    <h2>Gestão de Diaristas</h2>
+    <div class="form-group">
+        <input type="hidden" id="f_id">
+        <input type="text" id="f_nome" placeholder="Nome Completo">
+        <input type="text" id="f_pix" placeholder="Chave PIX">
+        <input type="number" id="f_valor" placeholder="Valor da Diária">
+    </div>
+    <button class="btn-save" onclick="salvarGeral('funcionarios')">SALVAR DIARISTA</button>
+    <button onclick="exportarDiaristas()" style="margin-top:10px; width:100%; padding:12px; background:#34495e; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">📋 EXPORTAR LISTA PIX (EXCEL)</button>
+    <div id="lista_f_tab"></div>
+</div>
+
+<div id="pageObras" class="page">
+    <h2>Obras e Projetos</h2>
+    <div class="form-group">
+        <input type="hidden" id="o_id">
+        <input type="text" id="o_nome" placeholder="Nome da Obra">
+        <input type="text" id="o_sigla" placeholder="Sigla">
+    </div>
+    <button class="btn-save" onclick="salvarGeral('obras')">SALVAR OBRA</button>
+    <div id="lista_o_tab"></div>
+</div>
+
+<div id="pageConfig" class="page">
+    <h2>Backup e Sistema</h2>
+    <button class="btn-save" style="background:var(--warning)" onclick="fazerBackup()">📥 BAIXAR BACKUP .TXT</button>
+    <button class="btn-save" style="background:#9b59b6" onclick="document.getElementById('input_backup').click()">📤 IMPORTAR BACKUP</button>
+    <input type="file" id="input_backup" style="display:none" onchange="importarBackup(this)">
+</div>
+
+<footer>Delta Engenharia - Gestão v2.6</footer>
+
+<script>
+    let db = {
+        funcionarios: JSON.parse(localStorage.getItem('f') || '[]'),
+        obras: JSON.parse(localStorage.getItem('o') || '[]'),
+        quinzenas: JSON.parse(localStorage.getItem('q') || '[]'),
+        lancamentos: JSON.parse(localStorage.getItem('l') || '{}')
+    };
+
+    function showPage(id) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        preencherSelects();
+        if(id === 'pagePonto') { verificarDataQuinzena(); atualizarPontoHoje(); }
+        if(id === 'pageRelatorios') renderRelatorio();
+        if(id === 'pageResumoObra') renderResumoObra();
+        renderTabelasCadastros();
+    }
+
+    function getDataLocalISO() {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    function calcularValorHE(valorDiaria, horas) {
+        return (valorDiaria && horas) ? (parseFloat(horas) * (parseFloat(valorDiaria) / 8)) : 0;
+    }
+
+    function salvarPontoHoje() {
+        const qId = document.getElementById('sel_q_ativa').value;
+        const dtLocal = getDataLocalISO();
+        if(!qId) return alert("Selecione uma quinzena ativa!");
+        
+        db.lancamentos[qId] = db.lancamentos[qId] || {};
+        const registrosHoje = {};
+        
+        db.funcionarios.forEach((f, i) => {
+            registrosHoje[f.id] = {
+                m: document.getElementById(`m_${i}`).value,
+                t: document.getElementById(`t_${i}`).value,
+                hev: document.getElementById(`hev_${i}`).value,
+                heo: document.getElementById(`heo_${i}`).value
+            };
+        });
+        
+        db.lancamentos[qId][dtLocal] = registrosHoje;
+        localStorage.setItem('l', JSON.stringify(db.lancamentos));
+        alert(`Sucesso! Ponto salvo em ${dtLocal}`);
+    }
+
+    function atualizarPontoHoje() {
+        const dt = new Date();
+        const dtISO = getDataLocalISO();
+        const qId = document.getElementById('sel_q_ativa').value;
+        
+        // Busca lançamentos já existentes para hoje
+        const hojeSalvo = db.lancamentos[qId]?.[dtISO] || {};
+
+        document.getElementById('header_hoje').innerText = dt.toLocaleDateString('pt-BR', {weekday:'long', day:'2-digit', month:'long', year:'numeric'});
+        
+        let html = "";
+        db.funcionarios.forEach((f, i) => {
+            const l = hojeSalvo[f.id] || {m:'', t:'', hev:'', heo:''};
+            
+            html += `<tr><td class="col-nome">${f.nome}<br><small>R$ ${f.valor}</small></td>
+                <td>${gerarSelObra(`m_${i}`, l.m)}</td>
+                <td>${gerarSelObra(`t_${i}`, l.t)}</td>
+                <td><input type="number" class="input-mini" id="hev_${i}" step="0.5" value="${l.hev}"></td>
+                <td>${gerarSelObra(`heo_${i}`, l.heo)}</td></tr>`;
+        });
+        document.getElementById('corpo_hoje').innerHTML = html;
+    }
+
+    function gerarSelObra(id, valorPreenchido = "") {
+        let s = `<select id="${id}" style="width:65px; font-size:10px"><option value=""></option>`;
+        db.obras.forEach(o => {
+            let sel = (o.sigla === valorPreenchido) ? "selected" : "";
+            s += `<option value="${o.sigla}" ${sel}>${o.sigla}</option>`;
+        });
+        return s + `</select>`;
+    }
+
+    function renderRelatorio() {
+        const qId = document.getElementById('sel_rel_q').value;
+        const q = db.quinzenas.find(x => x.id == qId);
+        if(!q) return;
+        
+        let dias = []; 
+        let d = new Date(q.inicio + "T00:00:00");
+        let df = new Date(q.fim + "T00:00:00");
+        while(d <= df) { dias.push(new Date(d)); d.setDate(d.getDate()+1); }
+
+        let h = `<table id="tabela_final"><thead><tr><th class="col-nome">DIARISTA</th>`;
+        dias.forEach(dia => h += `<th colspan="4">${dia.getDate()}/${dia.getMonth()+1}</th>`);
+        h += `<th class="total-final">TOTAL R$</th></tr><tr><th class="col-nome"></th>`;
+        dias.forEach(() => h += `<th>M</th><th>T</th><th>HE</th><th>OB</th>`);
+        h += `<th></th></tr></thead><tbody>`;
+
+        db.funcionarios.forEach((f) => {
+            let sD = 0, vHE = 0;
+            h += `<tr><td class="col-nome">${f.nome}</td>`;
+            dias.forEach(dia => {
+                const dt = `${dia.getFullYear()}-${String(dia.getMonth() + 1).padStart(2, '0')}-${String(dia.getDate()).padStart(2, '0')}`;
+                const l = db.lancamentos[qId]?.[dt]?.[f.id] || {m:'', t:'', hev:'', heo:''};
+                
+                sD += (l.m?0.5:0) + (l.t?0.5:0);
+                vHE += calcularValorHE(f.valor, l.hev);
+                
+                h += `<td><input class="input-mini r-inp" data-q="${qId}" data-d="${dt}" data-f="${f.id}" data-field="m" value="${l.m}"></td>
+                      <td><input class="input-mini r-inp" data-q="${qId}" data-d="${dt}" data-f="${f.id}" data-field="t" value="${l.t}"></td>
+                      <td><input class="input-mini r-inp" data-q="${qId}" data-d="${dt}" data-f="${f.id}" data-field="hev" value="${l.hev}"></td>
+                      <td><input class="input-mini r-inp" data-q="${qId}" data-d="${dt}" data-f="${f.id}" data-field="heo" value="${l.heo}"></td>`;
+            });
+            h += `<td class="total-final">R$ ${((sD * (f.valor || 0)) + vHE).toFixed(2)}</td></tr>`;
+        });
+        document.getElementById('container_relatorio').innerHTML = h + `</tbody></table>`;
+        document.getElementById('btn_salvar_edicao').style.display = 'block';
+    }
+
+    function salvarAlteracoesRelatorio() {
+        document.querySelectorAll('.r-inp').forEach(inp => {
+            const { q, d, f, field } = inp.dataset;
+            if(!db.lancamentos[q]) db.lancamentos[q] = {};
+            if(!db.lancamentos[q][d]) db.lancamentos[q][d] = {};
+            if(!db.lancamentos[q][d][f]) db.lancamentos[q][d][f] = {m:'', t:'', hev:'', heo:''};
+            db.lancamentos[q][d][f][field] = inp.value;
+        });
+        localStorage.setItem('l', JSON.stringify(db.lancamentos));
+        renderRelatorio();
+        alert("Planilha de fechamento atualizada!");
+    }
+
+    function verificarDataQuinzena() {
+        const qId = document.getElementById('sel_q_ativa').value;
+        const q = db.quinzenas.find(x => x.id == qId);
+        const dtLocal = getDataLocalISO();
+        document.getElementById('alerta_data').style.display = (q && (dtLocal < q.inicio || dtLocal > q.fim)) ? 'block' : 'none';
+    }
+
+    function salvarGeral(tipo) {
+        const map = { funcionarios:['f_id','f'], obras:['o_id','o'], quinzenas:['q_id','q'] };
+        let idVal = document.getElementById(map[tipo][0]).value;
+        let obj = { id: idVal || Date.now() };
+        if(tipo==='funcionarios'){ obj.nome=document.getElementById('f_nome').value; obj.pix=document.getElementById('f_pix').value; obj.valor=document.getElementById('f_valor').value; }
+        else if(tipo==='obras'){ obj.nome=document.getElementById('o_nome').value; obj.sigla=document.getElementById('o_sigla').value; }
+        else { obj.nome=document.getElementById('q_nome').value; obj.inicio=document.getElementById('q_ini').value; obj.fim=document.getElementById('q_fim').value; }
+        let list = db[tipo];
+        let idx = list.findIndex(x => x.id == obj.id);
+        if(idx===-1) list.push(obj); else list[idx]=obj;
+        localStorage.setItem(map[tipo][1], JSON.stringify(list));
+        location.reload();
+    }
+
+    function renderTabelasCadastros() {
+        const btn = (t, id) => `<button class="btn-tabela" style="background:var(--warning)" onclick="carregarEdicao('${t}',${id})">E</button><button class="btn-tabela" style="background:var(--danger)" onclick="excluir('${t}',${id})">X</button>`;
+        document.getElementById('lista_f_tab').innerHTML = `<table><tr><th>Nome</th><th>PIX</th><th>R$</th><th>Ações</th></tr>` + db.funcionarios.map(f => `<tr><td>${f.nome}</td><td>${f.pix}</td><td>${f.valor}</td><td>${btn('f',f.id)}</td></tr>`).join('') + `</table>`;
+        document.getElementById('lista_o_tab').innerHTML = `<table><tr><th>Sigla</th><th>Ações</th></tr>` + db.obras.map(o => `<tr><td>${o.sigla}</td><td>${btn('o',o.id)}</td></tr>`).join('') + `</table>`;
+        document.getElementById('lista_q_tab').innerHTML = `<table><tr><th>Quinzena</th><th>Período</th><th>Ações</th></tr>` + db.quinzenas.map(q => `<tr><td>${q.nome}</td><td>${q.inicio} / ${q.fim}</td><td>${btn('q',q.id)}</td></tr>`).join('') + `</table>`;
+    }
+
+    function carregarEdicao(t, id) {
+        const tipos = { f: 'funcionarios', o: 'obras', q: 'quinzenas' };
+        const item = db[tipos[t]].find(x => x.id == id);
+        if(t==='f'){ document.getElementById('f_id').value=item.id; document.getElementById('f_nome').value=item.nome; document.getElementById('f_pix').value=item.pix; document.getElementById('f_valor').value=item.valor; }
+        if(t==='o'){ document.getElementById('o_id').value=item.id; document.getElementById('o_nome').value=item.nome; document.getElementById('o_sigla').value=item.sigla; }
+        if(t==='q'){ document.getElementById('q_id').value=item.id; document.getElementById('q_nome').value=item.nome; document.getElementById('q_ini').value=item.inicio; document.getElementById('q_fim').value=item.fim; }
+    }
+
+    function excluir(t, id) {
+        if(confirm("Deseja realmente excluir este registro?")){
+            const tipos = { f: 'f', o: 'o', q: 'q' };
+            const tipoDb = { f: 'funcionarios', o: 'obras', q: 'quinzenas' };
+            db[tipoDb[t]] = db[tipoDb[t]].filter(x => x.id != id);
+            localStorage.setItem(tipos[t], JSON.stringify(db[tipoDb[t]]));
+            renderTabelasCadastros();
+        }
+    }
+
+    function preencherSelects() {
+        const dtLocal = getDataLocalISO();
+        ['sel_q_ativa', 'sel_rel_q', 'sel_resumo_q'].forEach(sId => {
+            const s = document.getElementById(sId); if(!s) return;
+            const valAnterior = s.value;
+            s.innerHTML = db.quinzenas.map(q => {
+                let sel = (dtLocal >= q.inicio && dtLocal <= q.fim) ? "selected" : "";
+                return `<option value="${q.id}" ${sel}>${q.nome}</option>`;
+            }).join('');
+            if(valAnterior) s.value = valAnterior;
+        });
+    }
+
+    function renderResumoObra() {
+        const qId = document.getElementById('sel_resumo_q').value;
+        let resumo = {}; db.obras.forEach(o => resumo[o.sigla] = 0);
+        Object.values(db.lancamentos[qId] || {}).forEach(dia => {
+            for(let fId in dia) {
+                const l = dia[fId];
+                const f = db.funcionarios.find(x => x.id == fId);
+                if(!f) continue;
+                if(l.m) resumo[l.m] = (resumo[l.m] || 0) + (f.valor/2);
+                if(l.t) resumo[l.t] = (resumo[l.t] || 0) + (f.valor/2);
+                if(l.hev && l.heo) resumo[l.heo] = (resumo[l.heo] || 0) + calcularValorHE(f.valor, l.hev);
+            }
+        });
+        let html = "";
+        for(let obra in resumo) html += `<div class="card-obra"><span><strong>${obra}</strong></span> <span>R$ ${resumo[obra].toFixed(2)}</span></div>`;
+        document.getElementById('container_resumo_obra').innerHTML = html || "Sem lançamentos nesta quinzena.";
+    }
+
+    function enviarWhatsApp() {
+        const qId = document.getElementById('sel_rel_q').value;
+        const q = db.quinzenas.find(x => x.id == qId);
+        let msg = `*DELTA ENGENHARIA - FECHAMENTO*\n*Período: ${q.nome}*\n\n`;
+        db.funcionarios.forEach((f) => {
+            let sD = 0, vHE = 0;
+            Object.values(db.lancamentos[qId] || {}).forEach(dia => {
+                const l = dia[f.id]; if(l){ sD += (l.m?0.5:0) + (l.t?0.5:0); vHE += calcularValorHE(f.valor, l.hev); }
+            });
+            msg += `👤 *${f.nome}*\n💰 Total: R$ ${((sD * f.valor) + vHE).toFixed(2)}\n🔑 PIX: ${f.pix}\n\n`;
+        });
+        window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`);
+    }
+
+    function exportarExcel() {
+        let wb = XLSX.utils.book_new();
+        let ws_data = [];
+        document.querySelectorAll("#tabela_final tr").forEach(row => {
+            let rData = [];
+            row.querySelectorAll("th, td").forEach(cell => {
+                const inp = cell.querySelector("input");
+                rData.push(inp ? inp.value : cell.innerText);
+            });
+            ws_data.push(rData);
+        });
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ws_data), "Fechamento");
+        XLSX.writeFile(wb, `DELTA_GERAL_${getDataLocalISO()}.xlsx`);
+    }
+
+    function exportarDiaristas() {
+        let ws_data = [["NOME DO DIARISTA", "CHAVE PIX", "VALOR DIÁRIA"]];
+        db.funcionarios.forEach(f => ws_data.push([f.nome, f.pix, f.valor]));
+        let wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ws_data), "Lista PIX");
+        XLSX.writeFile(wb, `DELTA_CADASTRO_PIX.xlsx`);
+    }
+
+    function fazerBackup() {
+        const blob = new Blob([JSON.stringify(db)], {type:'text/plain'});
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+        a.download = `DELTA_BACKUP.txt`; a.click();
+    }
+
+    function importarBackup(input) {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const d = JSON.parse(reader.result);
+            localStorage.setItem('f', JSON.stringify(d.funcionarios));
+            localStorage.setItem('o', JSON.stringify(d.obras));
+            localStorage.setItem('q', JSON.stringify(d.quinzenas));
+            localStorage.setItem('l', JSON.stringify(d.lancamentos));
+            location.reload();
+        };
+        reader.readAsText(input.files[0]);
+    }
+
+    showPage('pagePonto');
+</script>
+</body>
+</html>
